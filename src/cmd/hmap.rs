@@ -1,5 +1,5 @@
 use crate::cmd::{extract_args, validate_command, CommandError, HGet, HGetAll, HSet};
-use crate::{RespArray, RespFrame, RespMap};
+use crate::{BulkString, RespArray, RespFrame};
 
 use super::{CommandExecutor, RESP_OK};
 
@@ -18,12 +18,19 @@ impl CommandExecutor for HGetAll {
 
         match hmap {
             Some(hmap) => {
-                let mut map = RespMap::new();
+                let mut data = Vec::with_capacity(hmap.len());
                 for v in hmap.iter() {
                     let key = v.key().to_owned();
-                    map.insert(key, v.value().clone());
+                    data.push((key, v.value().clone()));
                 }
-                map.into()
+                if self.sort {
+                    data.sort_by(|a, b| a.0.cmp(&b.0));
+                }
+                let ret = data
+                    .into_iter()
+                    .flat_map(|(k, v)| vec![BulkString::from(k).into(), v])
+                    .collect::<Vec<RespFrame>>();
+                RespArray::new(ret).into()
             }
             None => RespArray::new([]).into(),
         }
@@ -66,6 +73,7 @@ impl TryFrom<RespArray> for HGetAll {
         match args.next() {
             Some(RespFrame::BulkString(key)) => Ok(HGetAll {
                 key: String::from_utf8(key.0)?,
+                sort: false,
             }),
             _ => Err(CommandError::InvalidArgument("Invalid key".to_string())),
         }
@@ -141,6 +149,46 @@ mod tests {
         assert_eq!(result.field, "hello");
         assert_eq!(result.value, RespFrame::BulkString(b"world".into()));
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_hset_hget_hgetall_commands() -> Result<()> {
+        let backend = crate::Backend::new();
+        let cmd = HSet {
+            key: "map".to_string(),
+            field: "hello".to_string(),
+            value: RespFrame::BulkString(b"world".into()),
+        };
+        let result = cmd.execute(&backend);
+        assert_eq!(result, RESP_OK.clone());
+
+        let cmd = HSet {
+            key: "map".to_string(),
+            field: "hello1".to_string(),
+            value: RespFrame::BulkString(b"world1".into()),
+        };
+        cmd.execute(&backend);
+
+        let cmd = HGet {
+            key: "map".to_string(),
+            field: "hello".to_string(),
+        };
+        let result = cmd.execute(&backend);
+        assert_eq!(result, RespFrame::BulkString(b"world".into()));
+
+        let cmd = HGetAll {
+            key: "map".to_string(),
+            sort: true,
+        };
+        let result = cmd.execute(&backend);
+        let expected = RespArray::new(vec![
+            BulkString::from("hello").into(),
+            BulkString::from("world").into(),
+            BulkString::from("hello1").into(),
+            BulkString::from("world1").into(),
+        ]);
+        assert_eq!(result, expected.into());
         Ok(())
     }
 }
