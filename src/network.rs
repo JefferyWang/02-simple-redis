@@ -6,7 +6,7 @@ use tracing::info;
 
 use crate::{
     cmd::{Command, CommandExecutor},
-    Backend, RespDecode, RespEncode, RespError, RespFrame,
+    Backend, RespDecode, RespEncode, RespError, RespFrame, SimpleError,
 };
 use tokio_util::codec::{Decoder, Encoder, Framed};
 
@@ -35,9 +35,20 @@ pub async fn stream_handler(stream: TcpStream, backend: Backend) -> Result<()> {
                     frame,
                     backend: backend.clone(),
                 };
-                let response = request_handler(request).await?;
-                info!("Sending response: {:?}", response.frame);
-                framed.send(response.frame).await?;
+                let response = request_handler(request).await;
+                match response {
+                    Ok(response) => {
+                        info!("Sending response: {:?}", response.frame);
+                        framed.send(response.frame).await?;
+                    }
+                    Err(e) => {
+                        info!("Error: {:?}", e);
+                        let response = RedisResponse {
+                            frame: RespFrame::Error(SimpleError::from(format!("{}", e))),
+                        };
+                        framed.send(response.frame).await?;
+                    }
+                }
                 // how to send the response back to the stream?
             }
             Some(Err(e)) => return Err(e),
@@ -59,6 +70,7 @@ impl Encoder<RespFrame> for RespFrameCodec {
 
     fn encode(&mut self, item: RespFrame, dst: &mut bytes::BytesMut) -> Result<()> {
         let encoded = item.encode();
+        info!("Encoding frame: {:?}", String::from_utf8_lossy(&encoded));
         dst.extend_from_slice(&encoded);
         Ok(())
     }

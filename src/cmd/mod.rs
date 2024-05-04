@@ -1,5 +1,7 @@
+mod echo;
 mod hmap;
 mod map;
+mod set;
 
 use crate::{Backend, RespArray, RespError, RespFrame, SimpleString};
 use enum_dispatch::enum_dispatch;
@@ -36,6 +38,10 @@ pub enum Command {
     HGet(HGet),
     HSet(HSet),
     HGetAll(HGetAll),
+    HMGet(HMGet),
+    Echo(Echo),
+    SAdd(SAdd),
+    SisMember(SisMember),
 
     Unrecognized(Unrecognized),
 }
@@ -71,6 +77,29 @@ pub struct HGetAll {
 }
 
 #[derive(Debug)]
+pub struct HMGet {
+    key: String,
+    fields: Vec<String>,
+}
+
+#[derive(Debug)]
+pub struct Echo {
+    message: String,
+}
+
+#[derive(Debug)]
+pub struct SAdd {
+    key: String,
+    member: String,
+}
+
+#[derive(Debug)]
+pub struct SisMember {
+    key: String,
+    member: String,
+}
+
+#[derive(Debug)]
 pub struct Unrecognized;
 
 impl TryFrom<RespFrame> for Command {
@@ -96,6 +125,10 @@ impl TryFrom<RespArray> for Command {
                 b"hget" => Ok(HGet::try_from(v)?.into()),
                 b"hset" => Ok(HSet::try_from(v)?.into()),
                 b"hgetall" => Ok(HGetAll::try_from(v)?.into()),
+                b"hmget" => Ok(HMGet::try_from(v)?.into()),
+                b"echo" => Ok(Echo::try_from(v)?.into()),
+                b"sadd" => Ok(SAdd::try_from(v)?.into()),
+                b"sismember" => Ok(SisMember::try_from(v)?.into()),
                 _ => Ok(Unrecognized.into()),
             },
             _ => Err(CommandError::InvalidCommand(
@@ -124,6 +157,30 @@ fn validate_command(
         )));
     }
 
+    validate_command_name(value, names)?;
+
+    Ok(())
+}
+
+fn validate_command_at_least(
+    value: &RespArray,
+    names: &[&'static str],
+    n_args: usize,
+) -> Result<(), CommandError> {
+    if value.len() < n_args + names.len() {
+        return Err(CommandError::InvalidArgument(format!(
+            "{} command must have at least {} argument",
+            names.join(" "),
+            n_args
+        )));
+    }
+
+    validate_command_name(value, names)?;
+
+    Ok(())
+}
+
+fn validate_command_name(value: &RespArray, names: &[&'static str]) -> Result<(), CommandError> {
     for (i, name) in names.iter().enumerate() {
         match value[i] {
             RespFrame::BulkString(ref cmd) => {
@@ -142,7 +199,6 @@ fn validate_command(
             }
         }
     }
-
     Ok(())
 }
 

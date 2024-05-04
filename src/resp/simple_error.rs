@@ -53,6 +53,12 @@ impl From<&str> for SimpleError {
     }
 }
 
+impl From<String> for SimpleError {
+    fn from(s: String) -> Self {
+        SimpleError(s)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
