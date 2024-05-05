@@ -25,8 +25,8 @@ impl TryFrom<RespArray> for SAdd {
         let mut args = extract_args(value, 1)?.into_iter();
         match (args.next(), args.next()) {
             (Some(RespFrame::BulkString(key)), Some(RespFrame::BulkString(member))) => Ok(SAdd {
-                key: String::from_utf8(key.0)?,
-                member: String::from_utf8(member.0)?,
+                key: String::from_utf8(key.get_data()?)?,
+                member: String::from_utf8(member.get_data()?)?,
             }),
             _ => Err(CommandError::InvalidArgument(
                 "Invalid key or value".to_string(),
@@ -45,8 +45,8 @@ impl TryFrom<RespArray> for SisMember {
         match (args.next(), args.next()) {
             (Some(RespFrame::BulkString(key)), Some(RespFrame::BulkString(member))) => {
                 Ok(SisMember {
-                    key: String::from_utf8(key.0)?,
-                    member: String::from_utf8(member.0)?,
+                    key: String::from_utf8(key.get_data()?)?,
+                    member: String::from_utf8(member.get_data()?)?,
                 })
             }
             _ => Err(CommandError::InvalidArgument(

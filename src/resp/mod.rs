@@ -11,14 +11,8 @@ mod simple_error;
 mod simple_string;
 
 pub use self::{
-    array::{RespArray, RespNullArray},
-    bulk_string::{BulkString, RespNullBulkString},
-    frame::RespFrame,
-    map::RespMap,
-    null::RespNull,
-    set::RespSet,
-    simple_error::SimpleError,
-    simple_string::SimpleString,
+    array::RespArray, bulk_string::BulkString, frame::RespFrame, map::RespMap, null::RespNull,
+    set::RespSet, simple_error::SimpleError, simple_string::SimpleString,
 };
 use bytes::{Buf, BytesMut};
 use enum_dispatch::enum_dispatch;
@@ -110,6 +104,11 @@ fn find_crlf(buf: &[u8], nth: usize) -> Option<usize> {
 }
 
 fn parse_length(buf: &[u8], prefix: &str) -> Result<(usize, usize), RespError> {
+    let (end, length) = parse_length_isize(buf, prefix)?;
+    Ok((end, length as usize))
+}
+
+fn parse_length_isize(buf: &[u8], prefix: &str) -> Result<(usize, isize), RespError> {
     let end = extract_simple_frame_data(buf, prefix)?;
     let s = String::from_utf8_lossy(&buf[prefix.len()..end]);
     Ok((end, s.parse()?))

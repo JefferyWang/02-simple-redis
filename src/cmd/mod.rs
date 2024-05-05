@@ -184,6 +184,12 @@ fn validate_command_name(value: &RespArray, names: &[&'static str]) -> Result<()
     for (i, name) in names.iter().enumerate() {
         match value[i] {
             RespFrame::BulkString(ref cmd) => {
+                if cmd.0.is_none() {
+                    return Err(CommandError::InvalidCommand(
+                        "Command must have a non-empty BulkString as the first argument"
+                            .to_string(),
+                    ));
+                }
                 if cmd.as_ref().to_ascii_lowercase() != name.as_bytes() {
                     return Err(CommandError::InvalidCommand(format!(
                         "Invalid command: expected {}, got {}",
@@ -203,7 +209,12 @@ fn validate_command_name(value: &RespArray, names: &[&'static str]) -> Result<()
 }
 
 fn extract_args(value: RespArray, start: usize) -> Result<Vec<RespFrame>, CommandError> {
-    Ok(value.0.into_iter().skip(start).collect::<Vec<RespFrame>>())
+    match value.0 {
+        None => Err(CommandError::InvalidArgument(
+            "Invalid argument".to_string(),
+        )),
+        Some(items) => Ok(items.into_iter().skip(start).collect::<Vec<RespFrame>>()),
+    }
 }
 
 #[cfg(test)]

@@ -17,7 +17,7 @@ impl TryFrom<RespArray> for Echo {
         let mut args = extract_args(value, 1)?.into_iter();
         match args.next() {
             Some(RespFrame::BulkString(key)) => Ok(Echo {
-                message: String::from_utf8(key.0)?,
+                message: String::from_utf8(key.get_data()?)?,
             }),
             _ => Err(CommandError::InvalidArgument("Invalid key".to_string())),
         }

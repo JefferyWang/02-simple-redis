@@ -68,8 +68,8 @@ impl TryFrom<RespArray> for HGet {
         let mut args = extract_args(value, 1)?.into_iter();
         match (args.next(), args.next()) {
             (Some(RespFrame::BulkString(key)), Some(RespFrame::BulkString(field))) => Ok(HGet {
-                key: String::from_utf8(key.0)?,
-                field: String::from_utf8(field.0)?,
+                key: String::from_utf8(key.get_data()?)?,
+                field: String::from_utf8(field.get_data()?)?,
             }),
             _ => Err(CommandError::InvalidArgument(
                 "Invalid key or field".to_string(),
@@ -87,7 +87,7 @@ impl TryFrom<RespArray> for HGetAll {
         let mut args = extract_args(value, 1)?.into_iter();
         match args.next() {
             Some(RespFrame::BulkString(key)) => Ok(HGetAll {
-                key: String::from_utf8(key.0)?,
+                key: String::from_utf8(key.get_data()?)?,
                 sort: false,
             }),
             _ => Err(CommandError::InvalidArgument("Invalid key".to_string())),
@@ -105,8 +105,8 @@ impl TryFrom<RespArray> for HSet {
         match (args.next(), args.next(), args.next()) {
             (Some(RespFrame::BulkString(key)), Some(RespFrame::BulkString(field)), Some(value)) => {
                 Ok(HSet {
-                    key: String::from_utf8(key.0)?,
-                    field: String::from_utf8(field.0)?,
+                    key: String::from_utf8(key.get_data()?)?,
+                    field: String::from_utf8(field.get_data()?)?,
                     value,
                 })
             }
@@ -126,13 +126,13 @@ impl TryFrom<RespArray> for HMGet {
         let fields_len = value.len() - 2;
         let mut args = extract_args(value, 1)?.into_iter();
         let key = match args.next() {
-            Some(RespFrame::BulkString(k)) => String::from_utf8(k.0)?,
+            Some(RespFrame::BulkString(k)) => String::from_utf8(k.get_data()?)?,
             _ => return Err(CommandError::InvalidArgument("Invalid key".to_string())),
         };
         // 读取所有的 field 名字
         let mut fields = Vec::with_capacity(fields_len);
         while let Some(RespFrame::BulkString(field)) = args.next() {
-            let field = String::from_utf8(field.0)?;
+            let field = String::from_utf8(field.get_data()?)?;
             fields.push(field);
         }
         Ok(HMGet { key, fields })
