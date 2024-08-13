@@ -1,9 +1,9 @@
-use std::collections::BTreeMap;
 use std::vec;
+use std::{collections::BTreeMap, num::NonZeroUsize};
 
 use winnow::ascii::{digit1, float};
 use winnow::combinator::{alt, dispatch, fail, opt, preceded, terminated};
-use winnow::error::{ContextError, ErrMode};
+use winnow::error::{ContextError, ErrMode, Needed};
 use winnow::token::{any, take, take_until};
 use winnow::{PResult, Parser};
 
@@ -79,12 +79,11 @@ fn error(input: &mut &[u8]) -> PResult<SimpleError> {
     parse_string.map(SimpleError).parse_next(input)
 }
 
-// - integer: ":1000\r\n"
+// - integer: ":-1000\r\n"
 fn integer(input: &mut &[u8]) -> PResult<i64> {
-    let sign = opt(alt((b'+', b'-'))).parse_next(input)?.unwrap_or(b'+');
-    let sign: i64 = if sign == b'+' { 1 } else { -1 };
+    let sign = opt('-').parse_next(input)?.is_some();
     let v: i64 = terminated(digit1.parse_to(), CRLF).parse_next(input)?;
-    Ok(sign * v)
+    Ok(if sign { -v } else { v })
 }
 
 // Null bulk strings: "$-1\r\n"
@@ -101,8 +100,7 @@ fn bulk_string(input: &mut &[u8]) -> PResult<BulkString> {
     } else if len < 0 {
         return Err(err_cut("bulk string length must be non-negative"));
     }
-    let len = len as usize;
-    let data = terminated(take(len), CRLF)
+    let data = terminated(take(len as usize), CRLF)
         .map(|s: &[u8]| s.to_vec())
         .parse_next(input)?;
     Ok(BulkString::new(data.to_vec()))
@@ -115,9 +113,15 @@ fn bulk_string_len(input: &mut &[u8]) -> PResult<()> {
     } else if len < 0 {
         return Err(err_cut("bulk string length must be non-negative"));
     }
-    terminated(take(len as usize), CRLF)
-        .value(())
-        .parse_next(input)
+    // we don't really need to parse the data, just skip it
+    // this is a good optimization
+    let len_with_crlf = len as usize + 2;
+    if input.len() < len_with_crlf {
+        let size = NonZeroUsize::new((len_with_crlf - input.len()) as usize).unwrap();
+        return Err(ErrMode::Incomplete(Needed::Size(size)));
+    }
+    *input = &input[(len + 2) as usize..];
+    Ok(())
 }
 
 // "*-1\r\n"
